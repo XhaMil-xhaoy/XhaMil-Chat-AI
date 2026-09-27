@@ -212,5 +212,5 @@ npm run build:admin
 # 你的赞助，也是我持续更新的动力
 
 <p align="center">
-  <img src="docs/images/sponsor-wechat.jpg" alt="微信支付赞助" width="520" />
+  <img src="docs/images/sponsor-wechat.jpg" alt="微信支付赞助" width="720" />
 </p>
