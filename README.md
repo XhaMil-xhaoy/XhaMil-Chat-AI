@@ -72,7 +72,9 @@
 
 ## 局域网对讲
 
-![局域网对讲](docs/images/screenshots/06-lan-intercom.png)
+<p align="center">
+  <img src="docs/images/screenshots/06-lan-intercom.png" alt="局域网对讲" width="280" />
+</p>
 
 ---
 
