@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <style>
+    html, body, #map {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background: #e8eaeb; touch-action: none; overflow: hidden;
+    }
+    .amap-logo, .amap-copyright { opacity: .55 !important; transform: scale(.85); transform-origin: left bottom; }
+    .leaflet-control-attribution { display: none !important; }
+    .amap-corner-mark {
+      position: absolute; bottom: 36px; z-index: 500;
+      font: 11px/1.2 -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+      color: rgba(0, 0, 0, 0.42); pointer-events: none;
+      text-shadow: 0 0 2px #fff, 0 0 2px #fff;
+    }
+    .amap-corner-mark.left { left: 12px; right: auto; }
+    .amap-corner-mark.right { right: 12px; left: auto; }
+    .leaflet-container { background: #e8eaeb !important; }
+    .leaflet-tile-pane { filter: saturate(0.82) brightness(1.05) contrast(1.08); }
+    .pin-wrap {
+      position: relative; width: 28px; height: 40px;
+      margin-left: -14px; margin-top: -40px;
+    }
+    .pin-head {
+      width: 22px; height: 22px; margin: 0 auto;
+      border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+      background: #2B7DE9; border: 2.5px solid #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,.28);
+    }
+    .pin-dot {
+      position: absolute; left: 50%; top: 5px;
+      width: 7px; height: 7px; margin-left: -3.5px;
+      border-radius: 50%; background: #fff;
+    }
+    .me-dot {
+      width: 14px; height: 14px; margin-left: -7px; margin-top: -7px;
+      border-radius: 50%; background: #2B7DE9; border: 2.5px solid #fff;
+      box-shadow: 0 0 0 6px rgba(43,125,233,.22), 0 2px 6px rgba(0,0,0,.2);
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    (function () {
+      (function bootstrapFromUrl() {
+        try {
+          var q = new URLSearchParams(location.search);
+          var lat = parseFloat(q.get('lat'));
+          var lng = parseFloat(q.get('lng'));
+          var zoom = parseFloat(q.get('zoom'));
+          if (isFinite(lat) && isFinite(lng)) {
+            window.__XhaMilInitialPick = {
+              lat: lat,
+              lng: lng,
+              zoom: isFinite(zoom) ? zoom : 16.5
+            };
+          }
+          var mode = String(q.get('mode') || q.get('view') || '').trim();
+          if (mode === 'view' || q.get('view') === '1') {
+            window.XhaMilMapConfig = window.XhaMilMapConfig || {};
+            window.XhaMilMapConfig.viewOnly = true;
+            window.XhaMilMapConfig.mode = 'view';
+            window.XhaMilMapConfig.attributionSide = 'right';
+          }
+          var configKey = String(q.get('configKey') || '').trim();
+          if (configKey) {
+            try {
+              var rawCfg = localStorage.getItem(configKey);
+              if (rawCfg) {
+                var parsedCfg = JSON.parse(rawCfg);
+                window.XhaMilMapConfig = Object.assign(window.XhaMilMapConfig || {}, {
+                  key: parsedCfg.key || parsedCfg.data?.key || '',
+                  securityJsCode: parsedCfg.securityJsCode || parsedCfg.data?.securityJsCode || '',
+                  style: parsedCfg.style || parsedCfg.data?.style || ''
+                });
+                localStorage.removeItem(configKey);
+              }
+            } catch (e) {}
+          }
+        } catch (e) {}
+      })();
+
+      function apiBase() {
+        try {
+          var fromCfg = String((window.XhaMilMapConfig || {}).apiBase || '').trim();
+          if (fromCfg) return fromCfg.replace(/\/$/, '');
+        } catch (e) {}
+        try {
+          var fromLs = localStorage.getItem('xhamil.desktop.apiBase');
+          if (fromLs) return String(fromLs).replace(/\/$/, '');
+        } catch (e) {}
+        return '';
+      }
+
+      function useTileProxy() {
+        return !!apiBase() || /^https?:/i.test(location.protocol);
+      }
+
+      function tileProxyUrl(x, y, z) {
+        return apiBase() + '/api/location/tile?x=' + x + '&y=' + y + '&z=' + z;
+      }
+
+      (function hookInitialPick() {
+        var ip = window.__XhaMilInitialPick;
+        if (!ip) return;
+        var prev = window.XhaMilMap && window.XhaMilMap.onMapReady;
+        window.XhaMilMap = window.XhaMilMap || {};
+        window.XhaMilMap.onMapReady = function () {
+          try { if (prev) prev(); } catch (e) {}
+          var pick = window.__XhaMilInitialPick;
+          if (pick && window.setPickMarker) {
+            window.setPickMarker(pick.lat, pick.lng, true, false, pick.zoom || 16.5);
+          }
+        };
+      })();
+
+      var CFG = window.XhaMilMapConfig || {};
+      var KEY = String(CFG.key || '').trim();
+      var STYLE = String(CFG.style || 'amap://styles/normal').trim() || 'amap://styles/normal';
+      if (STYLE.indexOf('whitesmoke') >= 0 || STYLE.indexOf('fresh') >= 0) {
+        STYLE = 'amap://styles/normal';
+      }
+      var SECURITY = String(CFG.securityJsCode || '').trim();
+      var ATTR_SIDE = String(CFG.attributionSide || 'left').trim() === 'right' ? 'right' : 'left';
+      var VIEW_ONLY = CFG.viewOnly === true || CFG.viewOnly === 1 || CFG.viewOnly === '1' ||
+        CFG.viewOnly === 'true' || String(CFG.mode || '') === 'view';
+
+      function isWhitelistedHost() {
+        var h = (location.hostname || '').toLowerCase();
+        if (h === 'ask.xhamil.com' || h.endsWith('.xhamil.com')) return true;
+        try {
+          var base = apiBase();
+          if (base) {
+            var bh = new URL(base).hostname.toLowerCase();
+            if (bh && bh === h) return true;
+          }
+        } catch (e) {}
+        return false;
+      }
+
+      function shouldUseLeaflet() {
+        var eng = String(CFG.engine || '').trim().toLowerCase();
+        if (eng === 'leaflet' || eng === 'tiles') return true;
+        if (VIEW_ONLY && isWhitelistedHost() && KEY) return false;
+        if (VIEW_ONLY) return true;
+        // 仅 file:// 兜底走 Leaflet；https base 时用高德 3D（双指倾角）
+        if (/^file:/i.test(location.protocol)) return true;
+        return false;
+      }
+
+      function addAmapCornerMark() {
+        if (document.querySelector('.amap-corner-mark')) return;
+        var mark = document.createElement('div');
+        mark.className = 'amap-corner-mark ' + ATTR_SIDE;
+        mark.textContent = '© 高德';
+        document.getElementById('map').appendChild(mark);
+      }
+
+      var PIN_HTML =
+        '<div class="pin-wrap"><div class="pin-head"></div><div class="pin-dot"></div></div>';
+      var FIXED_PIN_HTML =
+        '<div class="pin-wrap" style="transform:scale(.92)">' +
+        '<div class="pin-head"></div><div class="pin-dot"></div></div>';
+
+      var engine = null;
+      var map = null;
+      var pickMarker = null;
+      var meMarker = null;
+      var suppressMove = false;
+      var ready = false;
+      var trafficLayer = null;
+      var leafletTraffic = null;
+
+      /** 路况 / 地点默认常开，无开关 */
+      function applyTrafficLayer() {
+        if (!map) return;
+        if (engine === 'amap') {
+          try {
+            if (!trafficLayer && typeof AMap !== 'undefined' && AMap.TileLayer) {
+              trafficLayer = new AMap.TileLayer.Traffic({
+                zIndex: 10,
+                autoRefresh: true,
+                interval: 180
+              });
+            }
+            if (trafficLayer) map.add(trafficLayer);
+          } catch (e) {}
+          return;
+        }
+        if (engine === 'leaflet' && window.L) {
+          try {
+            if (!leafletTraffic) {
+              leafletTraffic = L.tileLayer(
+                'https://tm.amap.com/trafficengine/mapabc/traffictile?v=1.0&t=1&x={x}&y={y}&z={z}',
+                { maxZoom: 18, opacity: 0.9, zIndex: 5 }
+              );
+            }
+            leafletTraffic.addTo(map);
+          } catch (e) {}
+        }
+      }
+
+      function notifyPick(lat, lng, reason) {
+        if (!window.XhaMilMap) return;
+        var z = 16;
+        try {
+          if (map) z = map.getZoom();
+        } catch (e) {}
+        window.XhaMilMap.onPickChanged(lat, lng, z, reason || 'tap');
+      }
+
+      function fireReady() {
+        if (ready) return;
+        ready = true;
+        if (window.XhaMilMap) window.XhaMilMap.onMapReady();
+      }
+
+      /* ---------- AMap 3D（有 Key+安全密钥时） ---------- */
+      function bootAmap() {
+        engine = 'amap';
+        map = new AMap.Map('map', {
+          zoom: 16,
+          center: [114.0, 32.0],
+          viewMode: '3D',
+          pitch: 0,
+          pitchEnable: true,
+          rotateEnable: true,
+          mapStyle: STYLE,
+          resizeEnable: true,
+          zoomEnable: true,
+          dragEnable: true,
+          doubleClickZoom: true,
+          scrollWheel: !!VIEW_ONLY,
+          animateEnable: true,
+          showBuildingBlock: true,
+          features: ['bg', 'road', 'building', 'point']
+        });
+        addAmapCornerMark();
+        applyTrafficLayer();
+        map.on('complete', fireReady);
+        // 兜底：别一直转圈
+        setTimeout(fireReady, 2500);
+
+        if (!VIEW_ONLY) {
+          map.on('click', function (e) {
+            if (!e || !e.lnglat) return;
+            ensureAmapPick(e.lnglat.getLng(), e.lnglat.getLat());
+            notifyPick(e.lnglat.getLat(), e.lnglat.getLng(), 'tap');
+          });
+        }
+        map.on('movestart', function () {
+          if (suppressMove) return;
+          if (window.XhaMilMap) window.XhaMilMap.onMoveStart();
+        });
+        map.on('moveend', function () {
+          if (suppressMove) { suppressMove = false; return; }
+          if (window.XhaMilMap) window.XhaMilMap.onMoveEnd();
+        });
+      }
+
+      function ensureAmapPick(lng, lat) {
+        if (VIEW_ONLY) return;
+        if (pickMarker) { pickMarker.setPosition([lng, lat]); return; }
+        pickMarker = new AMap.Marker({
+          position: [lng, lat],
+          anchor: 'bottom-center',
+          zIndex: 120,
+          content: PIN_HTML,
+          offset: new AMap.Pixel(0, 0)
+        });
+        map.add(pickMarker);
+      }
+
+      function ensureAmapFixed(lng, lat) {
+        if (pickMarker) { pickMarker.setPosition([lng, lat]); return; }
+        pickMarker = new AMap.Marker({
+          position: [lng, lat],
+          anchor: 'bottom-center',
+          zIndex: 120,
+          content: FIXED_PIN_HTML,
+          offset: new AMap.Pixel(0, 0),
+          draggable: false
+        });
+        map.add(pickMarker);
+      }
+
+      function ensureAmapMe(lng, lat) {
+        if (meMarker) { meMarker.setPosition([lng, lat]); return; }
+        meMarker = new AMap.CircleMarker({
+          center: [lng, lat],
+          radius: 7,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+          fillColor: '#2B7DE9',
+          fillOpacity: 1,
+          zIndex: 110
+        });
+        map.add(meMarker);
+      }
+
+      function leafletBase() {
+        if (/^https?:/i.test(location.protocol)) {
+          return (location.pathname || '/').replace(/[^/]*$/, '') + 'leaflet/';
+        }
+        return 'leaflet/';
+      }
+
+      /* ---------- Leaflet 瓦片（快、稳；双指缩放可用） ---------- */
+      function bootLeaflet() {
+        engine = 'leaflet';
+        var base = leafletBase();
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = base + 'leaflet.css';
+        document.head.appendChild(link);
+
+        function start() {
+          map = L.map('map', {
+            zoomControl: false,
+            attributionControl: false,
+            zoomSnap: 0.5,
+            fadeAnimation: false,
+            zoomAnimation: true,
+            preferCanvas: true,
+            dragging: true,
+            scrollWheelZoom: !!VIEW_ONLY,
+            doubleClickZoom: true,
+            touchZoom: true
+          }).setView([32, 114], 16);
+          var tileUrl = useTileProxy() && apiBase()
+            ? tileProxyUrl('{x}', '{y}', '{z}')
+            : 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}';
+          var tileOpts = {
+            maxZoom: 18,
+            maxNativeZoom: 18,
+            minZoom: 3,
+            updateWhenIdle: false,
+            keepBuffer: 4,
+            crossOrigin: true
+          };
+          if (tileUrl.indexOf('{s}') >= 0) tileOpts.subdomains = ['1', '2', '3', '4'];
+          L.tileLayer(tileUrl, tileOpts).addTo(map);
+          addAmapCornerMark();
+          applyTrafficLayer();
+
+          var pickIcon = L.divIcon({
+            className: '', html: PIN_HTML, iconSize: [28, 40], iconAnchor: [14, 40]
+          });
+          var fixedIcon = L.divIcon({
+            className: '', html: FIXED_PIN_HTML, iconSize: [28, 40], iconAnchor: [14, 40]
+          });
+          var meIcon = L.divIcon({
+            className: '',
+            html: '<div class="me-dot"></div>',
+            iconSize: [14, 14], iconAnchor: [7, 7]
+          });
+          window._leafletPickIcon = pickIcon;
+          window._leafletFixedIcon = fixedIcon;
+          window._leafletMeIcon = meIcon;
+
+          if (!VIEW_ONLY) {
+            map.on('click', function (e) {
+              if (pickMarker) pickMarker.setLatLng(e.latlng);
+              else pickMarker = L.marker(e.latlng, { icon: pickIcon, interactive: false }).addTo(map);
+              notifyPick(e.latlng.lat, e.latlng.lng, 'tap');
+            });
+          }
+          map.on('movestart', function () {
+            if (suppressMove) return;
+            if (window.XhaMilMap) window.XhaMilMap.onMoveStart();
+          });
+          map.on('moveend', function () {
+            if (suppressMove) { suppressMove = false; return; }
+            if (window.XhaMilMap) window.XhaMilMap.onMoveEnd();
+          });
+
+          setTimeout(function () {
+            try { map.invalidateSize(); } catch (e) {}
+          }, 80);
+          setTimeout(function () {
+            try { map.invalidateSize(); } catch (e) {}
+          }, 320);
+          // Leaflet 创建即可回调，不等瓦片全下完
+          fireReady();
+        }
+
+        if (window.L) {
+          start();
+          return;
+        }
+        var s = document.createElement('script');
+        s.src = base + 'leaflet.js';
+        s.onload = start;
+        s.onerror = function () {
+          // 本地失败再试 CDN
+          var s2 = document.createElement('script');
+          s2.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+          s2.onload = start;
+          s2.onerror = function () {
+            document.body.innerHTML =
+              '<div style="padding:24px;color:#666;font:14px sans-serif;">地图加载失败，请检查网络后重试</div>';
+            fireReady();
+          };
+          document.head.appendChild(s2);
+        };
+        document.head.appendChild(s);
+      }
+
+      window.setPickMarker = function (lat, lng, moveCamera, animate, zoom) {
+        if (!ready || !map) return;
+        var la = Number(lat), ln = Number(lng);
+        if (!isFinite(la) || !isFinite(ln)) return;
+        if (engine === 'amap') {
+          if (VIEW_ONLY) ensureAmapFixed(ln, la);
+          else ensureAmapPick(ln, la);
+          if (moveCamera) {
+            suppressMove = true;
+            var z = (typeof zoom === 'number' && zoom > 0) ? zoom : map.getZoom();
+            map.setZoomAndCenter(z, [ln, la]);
+            setTimeout(function () { suppressMove = false; }, 360);
+          }
+          return;
+        }
+        if (engine === 'leaflet') {
+          var icon = VIEW_ONLY ? window._leafletFixedIcon : window._leafletPickIcon;
+          if (pickMarker) pickMarker.setLatLng([la, ln]);
+          else pickMarker = L.marker([la, ln], { icon: icon, interactive: false }).addTo(map);
+          if (moveCamera) {
+            suppressMove = true;
+            var z2 = (typeof zoom === 'number' && zoom > 0) ? zoom : map.getZoom();
+            map.setView([la, ln], z2, { animate: !!animate });
+            setTimeout(function () { suppressMove = false; }, 360);
+          }
+        }
+      };
+
+      window.setMyLocation = function (lat, lng) {
+        if (!ready || !map) return;
+        var la = Number(lat), ln = Number(lng);
+        if (!isFinite(la) || !isFinite(ln)) return;
+        if (engine === 'amap') {
+          ensureAmapMe(ln, la);
+          return;
+        }
+        if (engine === 'leaflet') {
+          if (meMarker) meMarker.setLatLng([la, ln]);
+          else meMarker = L.marker([la, ln], { icon: window._leafletMeIcon, interactive: false }).addTo(map);
+        }
+      };
+
+      window.setMapCenter = function (lat, lng, zoom, animate) {
+        window.setPickMarker(lat, lng, true, !!animate, zoom);
+      };
+
+      window.setMapPitch = function (pitch) {
+        if (engine !== 'amap' || !map || typeof map.setPitch !== 'function') return false;
+        try {
+          map.setPitch(Math.max(0, Math.min(83, Number(pitch) || 0)));
+          return true;
+        } catch (e) {
+          return false;
+        }
+      };
+
+      window.toggleMap3D = function () {
+        if (engine !== 'amap' || !map || typeof map.getPitch !== 'function') return false;
+        try {
+          var cur = Number(map.getPitch()) || 0;
+          map.setPitch(cur > 12 ? 0 : 50);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      };
+
+      function amapTilesMissing() {
+        try {
+          var imgs = document.querySelectorAll('#map canvas, #map .amap-layer img, #map img.amap-tile');
+          return !imgs || !imgs.length;
+        } catch (e) {
+          return true;
+        }
+      }
+
+      function loadAmap() {
+        if (shouldUseLeaflet()) {
+          bootLeaflet();
+          return;
+        }
+        if (!KEY) {
+          bootLeaflet();
+          return;
+        }
+
+        var settled = false;
+        function fallback() {
+          if (settled) return;
+          settled = true;
+          try {
+            if (map && engine === 'amap') {
+              map.destroy();
+              map = null;
+            }
+          } catch (e) {}
+          var el = document.getElementById('map');
+          if (el) el.innerHTML = '';
+          ready = false;
+          bootLeaflet();
+        }
+
+        // 有安全密钥 → JS API 2.0；仅有 Web Key → 先试 1.4（可不配安全密钥）
+        var useV2 = !!SECURITY;
+        if (useV2) {
+          window._AMapSecurityConfig = { securityJsCode: SECURITY };
+        }
+        var s = document.createElement('script');
+        s.src = useV2
+          ? 'https://webapi.amap.com/maps?v=2.0&key=' + encodeURIComponent(KEY)
+          : 'https://webapi.amap.com/maps?v=1.4.15&key=' + encodeURIComponent(KEY);
+        s.async = true;
+        s.onload = function () {
+          try {
+            if (typeof AMap === 'undefined') throw new Error('no AMap');
+            bootAmap();
+            var timer = setTimeout(fallback, useV2 ? 3500 : 2800);
+            if (map) {
+              map.on('complete', function () {
+                setTimeout(function () {
+                  if (amapTilesMissing()) {
+                    fallback();
+                    return;
+                  }
+                  settled = true;
+                  clearTimeout(timer);
+                }, 700);
+              });
+            }
+          } catch (e) {
+            fallback();
+          }
+        };
+        s.onerror = fallback;
+        document.head.appendChild(s);
+      }
+
+      function maybeFetchConfig() {
+        if (KEY) return Promise.resolve();
+        var token = '';
+        try { token = localStorage.getItem('xhamil.desktop.token') || ''; } catch (e) {}
+        if (!token) return Promise.resolve();
+        var headers = { Accept: 'application/json', Authorization: 'Bearer ' + token };
+        return fetch(apiBase() + '/api/location/map-config', { headers: headers, cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (body) {
+            var cfg = body && body.data ? body.data : body;
+            if (!cfg || typeof cfg !== 'object') return;
+            if (cfg.key) KEY = String(cfg.key || '').trim();
+            if (cfg.securityJsCode) SECURITY = String(cfg.securityJsCode || '').trim();
+            if (cfg.style) {
+              var next = String(cfg.style || '').trim();
+              if (next) STYLE = next;
+            }
+          })
+          .catch(function () {});
+      }
+
+      function bootstrap() {
+        maybeFetchConfig().then(loadAmap);
+      }
+
+      bootstrap();
+    })();
+  </script>
+</body>
+</html>

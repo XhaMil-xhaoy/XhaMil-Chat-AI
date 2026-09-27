@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="robots" content="noindex,nofollow"/>
+<title>XhaMil 修改密码</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:linear-gradient(160deg,#eef3ff,#f7f8fb 48%,#eef6ff);color:#1c1c1e;padding:24px 14px}
+.wrap{width:min(92vw,420px);margin:0 auto}
+.card{padding:26px 22px 22px;border-radius:18px;background:rgba(255,255,255,.92);
+  box-shadow:0 12px 40px rgba(15,23,42,.1)}
+h1{margin:0 0 6px;font-size:20px;font-weight:700}
+.sub{margin:0 0 18px;color:#6b7280;font-size:13px;line-height:1.5}
+.err{padding:14px;border-radius:12px;background:#fef2f2;color:#b91c1c;font-size:14px;line-height:1.5}
+.ok{padding:14px;border-radius:12px;background:#ecfdf5;color:#047857;font-size:14px;line-height:1.5}
+.meta{margin:0 0 14px;font-size:13px;color:#4b5563}
+.tabs{display:flex;gap:8px;margin:0 0 16px}
+.tab{flex:1;border:1px solid #e5e7eb;background:#fff;border-radius:10px;padding:10px 8px;
+  font-size:13px;cursor:pointer;color:#374151}
+.tab.on{border-color:#3b82f6;background:#eff6ff;color:#1d4ed8;font-weight:600}
+.tab:disabled{opacity:.45;cursor:not-allowed}
+label{display:block;font-size:12px;color:#6b7280;margin:0 0 6px}
+.field{margin:0 0 12px}
+input{width:100%;height:42px;border:1px solid #e5e7eb;border-radius:10px;padding:0 12px;
+  font-size:15px;outline:none;background:#fff}
+input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.row{display:flex;gap:8px;align-items:stretch}
+.row input{flex:1}
+.btn{height:42px;border:0;border-radius:10px;padding:0 14px;font-size:14px;font-weight:600;
+  cursor:pointer;background:#2563eb;color:#fff}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.ghost{background:#f3f4f6;color:#374151}
+.btn.block{width:100%;margin-top:6px}
+.hint{margin:8px 0 0;font-size:12px;color:#9ca3af;line-height:1.4}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card" id="app">
+    <h1>修改密码</h1>
+    <p class="sub" id="subtitle">正在校验改密链接…</p>
+    <div id="stateErr" class="err hidden"></div>
+    <div id="stateOk" class="ok hidden"></div>
+    <div id="form" class="hidden">
+      <p class="meta" id="userMeta"></p>
+      <div class="tabs">
+        <button type="button" class="tab" id="tabEmail" disabled>邮箱找回</button>
+        <button type="button" class="tab" id="tabPhone" disabled>手机号找回</button>
+      </div>
+      <div class="field">
+        <label id="contactLabel">账号</label>
+        <input id="contact" autocomplete="username" placeholder=""/>
+      </div>
+      <div class="field">
+        <label>验证码</label>
+        <div class="row">
+          <input id="code" inputmode="numeric" maxlength="8" placeholder="6 位验证码" autocomplete="one-time-code"/>
+          <button type="button" class="btn ghost" id="sendBtn">发送验证码</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>新密码</label>
+        <input id="pwd" type="password" autocomplete="new-password" placeholder="至少 6 位"/>
+      </div>
+      <div class="field">
+        <label>确认新密码</label>
+        <input id="pwd2" type="password" autocomplete="new-password" placeholder="再输入一次"/>
+      </div>
+      <button type="button" class="btn block" id="submitBtn">确认修改</button>
+      <p class="hint" id="hint"></p>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var params = new URLSearchParams(location.search);
+  var token = String(params.get('token') || '').trim();
+  var method = 'phone';
+  var info = null;
+  var cooldown = 0;
+  var timer = null;
+
+  var $ = function(id){ return document.getElementById(id); };
+  var subtitle = $('subtitle');
+  var stateErr = $('stateErr');
+  var stateOk = $('stateOk');
+  var form = $('form');
+  var tabEmail = $('tabEmail');
+  var tabPhone = $('tabPhone');
+  var contactLabel = $('contactLabel');
+  var contact = $('contact');
+  var code = $('code');
+  var pwd = $('pwd');
+  var pwd2 = $('pwd2');
+  var sendBtn = $('sendBtn');
+  var submitBtn = $('submitBtn');
+  var hint = $('hint');
+  var userMeta = $('userMeta');
+
+  function showErr(msg){
+    stateOk.classList.add('hidden');
+    stateErr.textContent = msg || '出错了';
+    stateErr.classList.remove('hidden');
+  }
+  function clearErr(){ stateErr.classList.add('hidden'); stateErr.textContent=''; }
+  function api(path, opts){
+    return fetch('/api/password-reset/' + encodeURIComponent(token) + path, Object.assign({
+      headers: { 'Content-Type': 'application/json' }
+    }, opts || {})).then(function(r){
+      return r.json().then(function(j){
+        if (!r.ok || !j || j.code !== 0) {
+          var err = new Error((j && (j.message || j.msg)) || ('请求失败 ' + r.status));
+          err.status = r.status;
+          throw err;
+        }
+        return j;
+      });
+    });
+  }
+  function setMethod(m){
+    method = m;
+    tabEmail.classList.toggle('on', m === 'email');
+    tabPhone.classList.toggle('on', m === 'phone');
+    if (m === 'email') {
+      contactLabel.textContent = '邮箱';
+      contact.placeholder = info && info.emailMasked ? ('例如 ' + info.emailMasked) : '绑定的邮箱';
+      contact.value = '';
+      hint.textContent = info && info.emailMasked ? ('请输入与账号绑定一致的邮箱（' + info.emailMasked + '）') : '';
+    } else {
+      contactLabel.textContent = '手机号';
+      contact.placeholder = info && info.phoneMasked ? ('例如 ' + info.phoneMasked) : '绑定的手机号';
+      contact.value = '';
+      hint.textContent = info && info.phoneMasked ? ('请输入与账号绑定一致的手机号（' + info.phoneMasked + '）') : '';
+    }
+  }
+  function tickSend(){
+    if (cooldown <= 0) {
+      sendBtn.disabled = false;
+      sendBtn.textContent = '发送验证码';
+      return;
+    }
+    sendBtn.disabled = true;
+    sendBtn.textContent = cooldown + 's';
+    cooldown -= 1;
+    timer = setTimeout(tickSend, 1000);
+  }
+
+  if (!token) {
+    subtitle.textContent = '';
+    showErr('缺少改密令牌，请使用完整的改密网址打开。');
+    return;
+  }
+
+  api('', { method: 'GET' }).then(function(j){
+    info = (j && j.data) || j || {};
+    subtitle.textContent = '选择找回方式，验证通过后即可设置新密码';
+    userMeta.textContent = '账号：' + (info.nickname || info.username || '用户') +
+      (info.expiresAt ? (' · 链接有效至 ' + new Date(info.expiresAt).toLocaleString()) : '');
+    form.classList.remove('hidden');
+    tabEmail.disabled = !info.hasEmail;
+    tabPhone.disabled = !info.hasPhone;
+    if (info.hasPhone) setMethod('phone');
+    else if (info.hasEmail) setMethod('email');
+    else showErr('该账号未绑定邮箱或手机号');
+  }).catch(function(e){
+    subtitle.textContent = '';
+    showErr(e.message || '改密链接无效或已过期');
+  });
+
+  tabEmail.addEventListener('click', function(){ if (!tabEmail.disabled) setMethod('email'); });
+  tabPhone.addEventListener('click', function(){ if (!tabPhone.disabled) setMethod('phone'); });
+
+  sendBtn.addEventListener('click', function(){
+    clearErr();
+    var body = { method: method };
+    if (method === 'email') body.email = contact.value.trim();
+    else body.phone = contact.value.trim();
+    sendBtn.disabled = true;
+    api('/send-code', { method: 'POST', body: JSON.stringify(body) }).then(function(j){
+      var msg = (j && j.message) || '验证码已发送';
+      hint.textContent = msg;
+      cooldown = 60;
+      clearTimeout(timer);
+      tickSend();
+    }).catch(function(e){
+      sendBtn.disabled = false;
+      showErr(e.message || '发送失败');
+    });
+  });
+
+  submitBtn.addEventListener('click', function(){
+    clearErr();
+    if (pwd.value !== pwd2.value) { showErr('两次新密码不一致'); return; }
+    var body = {
+      method: method,
+      code: code.value.trim(),
+      newPassword: pwd.value,
+      confirmPassword: pwd2.value
+    };
+    if (method === 'email') body.email = contact.value.trim();
+    else body.phone = contact.value.trim();
+    submitBtn.disabled = true;
+    api('/reset', { method: 'POST', body: JSON.stringify(body) }).then(function(j){
+      form.classList.add('hidden');
+      subtitle.textContent = '';
+      stateOk.textContent = (j && j.message) || '密码已修改，请使用新密码登录';
+      stateOk.classList.remove('hidden');
+    }).catch(function(e){
+      submitBtn.disabled = false;
+      showErr(e.message || '修改失败');
+    });
+  });
+})();
+</script>
+</body>
+</html>

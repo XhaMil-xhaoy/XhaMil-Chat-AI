@@ -1,0 +1,109 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <title>XhaMil · 下载</title>
+  <link rel="icon" href="./icon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="./icon-round.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css?v=38" />
+</head>
+<body>
+  <div class="mesh" aria-hidden="true"></div>
+
+  <main class="wrap">
+    <header class="nav">
+      <div class="brand">
+        <img class="brand-icon" id="brandIcon" src="./icon.png" width="44" height="44" alt="XhaMil" />
+        <div>
+          <p class="brand-name" id="brandName">XhaMil</p>
+          <p class="brand-tag" id="brandTag">聊聊 · 更轻松</p>
+        </div>
+      </div>
+      <span class="pill">Android</span>
+    </header>
+
+    <section class="intro">
+      <div class="chips">
+        <span>私聊</span>
+        <span>群聊</span>
+        <span>语音房</span>
+        <span>说说</span>
+        <span>自定义人设</span>
+      </div>
+      <h1 class="title" id="headline">年轻人的聊天方式</h1>
+      <p class="lead" id="subline">装上就能用 · 清爽界面 · 聊天更轻松</p>
+    </section>
+
+    <section class="stage" aria-hidden="true">
+      <div class="glow"></div>
+      <div class="phone">
+        <div class="phone-bar"></div>
+        <img
+          class="shot"
+          src="./promo/chat-list.jpg"
+          alt="XhaMil 聊天列表"
+          width="476"
+          height="1024"
+          decoding="async"
+        />
+      </div>
+    </section>
+
+    <section class="actions">
+      <p class="ver-meta" id="verMeta">当前版本 <b id="verName">—</b></p>
+      <div class="cta-row">
+        <a class="btn btn-android" id="downloadBtn" href="#" aria-disabled="true">
+          <svg class="btn-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M17.6 9.48l1.84-3.18a.5.5 0 10-.87-.5l-1.86 3.22A7.8 7.8 0 0012 8c-1.63 0-3.14.5-4.4 1.35L5.74 5.8a.5.5 0 10-.87.5L6.7 9.48A7.95 7.95 0 004 16.5V18a2 2 0 002 2h12a2 2 0 002-2v-1.5a7.95 7.95 0 00-2.4-7.02zM9 14.25a1 1 0 110-2 1 1 0 010 2zm6 0a1 1 0 110-2 1 1 0 010 2z"/>
+          </svg>
+          <span class="btn-label" id="btnLabel">Android 下载</span>
+        </a>
+        <button class="btn btn-ios" type="button" disabled>iOS 暂未上架</button>
+      </div>
+      <p class="hint" id="hint">仅支持 Android · 安装时请允许「未知来源」</p>
+    </section>
+
+    <section class="card">
+      <div class="card-main">
+        <h2>获取安装包</h2>
+        <p id="versionLine">扫码或点击上方按钮下载安装包</p>
+        <ul class="steps">
+          <li><i>1</i><span>手机浏览器打开本页并下载</span></li>
+          <li><i>2</i><span>允许安装未知应用（仅本浏览器）</span></li>
+          <li><i>3</i><span>装好后打开即可连接服务器</span></li>
+        </ul>
+      </div>
+      <div class="card-qr">
+        <img
+          id="qrImg"
+          class="qr"
+          src="./qr.png"
+          width="132"
+          height="132"
+          alt="扫码直接下载"
+          decoding="async"
+        />
+        <p class="tip">扫码直接下载 APK</p>
+      </div>
+    </section>
+
+    <footer class="foot">
+      © <span id="year"></span> <span id="footBrand">XhaMil</span>
+      <span class="dot">·</span>
+      <span id="metaVersion">—</span>
+    </footer>
+  </main>
+
+  <div class="toast" id="toast" aria-live="polite"></div>
+
+  <script src="./config.js"></script>
+  <script src="./app.js?v=39"></script>
+</body>
+</html>

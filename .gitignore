@@ -1,0 +1,115 @@
+# —— 本地配置 / 密钥（勿提交真实配置）——
+json/config.json
+json/chat.db
+json/chat.db-*
+json/chat.db-shm
+json/chat.db-wal
+scripts/deploy.config.json
+backend/data/sessions.json
+backend/data/user-sessions.json
+admin-art/.env
+admin-art/.env.*
+!admin-art/.env.example
+!admin-art/.env.*.example
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# —— 依赖 ——
+node_modules/
+**/node_modules/
+
+# —— 构建产物 ——
+dist/
+dist-ssr/
+*.local
+
+# —— 运行时日志 ——
+backend/*.log
+backend/*.log.*
+*.log
+*.log.err
+
+# —— 用户上传 / 隐私运行时媒体（部署后自动建空目录，勿进开源仓）——
+# .folder-label / .gitkeep 用于开源仓目录中文标注与占位
+media/Chat Images/**
+!media/Chat Images/.gitkeep
+!media/Chat Images/.folder-label
+media/Chat Videos/**
+!media/Chat Videos/.gitkeep
+!media/Chat Videos/.folder-label
+media/Group Files/**
+!media/Group Files/.gitkeep
+!media/Group Files/.folder-label
+media/Moments/**
+!media/Moments/.gitkeep
+!media/Moments/.folder-label
+media/Moments Videos/**
+!media/Moments Videos/.gitkeep
+!media/Moments Videos/.folder-label
+media/Reports/**
+!media/Reports/.gitkeep
+!media/Reports/.folder-label
+media/App Releases/**
+!media/App Releases/.gitkeep
+!media/App Releases/.folder-label
+media/Audio/**
+!media/Audio/.gitkeep
+!media/Audio/.folder-label
+media/Tts/**
+!media/Tts/.gitkeep
+!media/Tts/.folder-label
+media/vosk/**
+!media/vosk/README.txt
+!media/vosk/.folder-label
+media/download-brand/**
+!media/download-brand/.gitkeep
+!media/download-brand/.folder-label
+media/Download Page/**
+!media/Download Page/.gitkeep
+!media/Download Page/.folder-label
+media/About Page/**
+!media/About Page/.gitkeep
+!media/About Page/.folder-label
+
+# 用户自定义头像：只保留默认头像
+media/avatar/**
+!media/avatar/.gitkeep
+!media/avatar/.folder-label
+!media/avatar/default.png
+
+# Default Avatars 备份目录
+media/Default Avatars/bak-*/
+
+# 官方图里的杂散上传音（只保留 Enter.mp3）
+media/Official Images/*.mp3
+!media/Official Images/Enter.mp3
+
+# backend 下运行时 TTS 样例
+backend/media/**
+
+# —— 签名证书 / 工具产物 ——
+*.jks
+*.keystore
+*.p12
+backend/pack/tools/*.class
+
+# —— 大体积可选资源 ——
+白-免费版/
+**/白-免费版/
+
+# —— 本机临时目录 ——
+暂时*/
+**/暂时*/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+!.vscode/extensions.json
+
+# nested git backups
+**/.git.bak-nested/
+admin-art/.git.bak-nested/
